@@ -63,13 +63,13 @@ Run simulation with the generated boot binary:
 ```
 litex_sim --csr-json csr.json --cpu-type=vexriscv --cpu-variant=full --integrated-main-ram-size=0x06400000 --ram-init=boot.bin
 ```
-7. Modify Firmware (boot Directory)
+## 7. Modify Firmware (boot Directory)
 
 All embedded C source files reside in the boot/ directory.
 To update the firmware:
-a. Modify or add C files under boot/.
-b. Rebuild and test via LiteX simulation.
-c. Re-run the simulation with your updated firmware:
+a. Modify or add C files under boot/.  
+b. Rebuild and test via LiteX simulation.  
+c. Re-run the simulation with your updated firmware:  
 
 ```
 litex_bare_metal_demo --build-path=build/sim
