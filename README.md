@@ -16,13 +16,13 @@ Ensure your system has the following installed:
 ## 1. Clone the Repository
 Clone the project repository containing the LiteX configuration and simulation modules:
 ```
-git clone https://github.com/QTrino-Labs-Pvt-Ltd/Constraint_Env_Sim.git
-cd Constraint_Env_Sim
+git clone https://github.com/Animesh221096/LP_Constraint_Env_Sim.git
+cd LP_Constraint_Env_Sim
 ```
 ## 2. Create and Activate Python Virtual Environment
 It is recommended to isolate LiteX and Python dependencies using a virtual environment.
 ```
-python3 -m venv litex-env
+python3.13 -m venv litex-env
 source litex-env/bin/activate
 ```
 Your shell should now indicate the active environment (litex-env).
@@ -51,7 +51,7 @@ These packages enable simulation and LiteX SoC generation.
 ## 5. Run LiteX Simulation Environment
 Launch the LiteX simulation with a RISC-V VexRiscv CPU core:
 ```
-litex_sim --csr-json csr.json --cpu-type=vexriscv --cpu-variant=full --integrated-main-ram-size=0x06400000
+litex_sim --csr-json csr.json --with-ethernet --cpu-type=vexriscv --cpu-variant=full --integrated-main-ram-size=0x06400000
 ```
 Use CTRL + C to exit the simulation.
 ## 6. Build and Run the LiteX Bare-Metal Demo
@@ -61,7 +61,7 @@ litex_bare_metal_demo --build-path=build/sim
 ```
 Run simulation with the generated boot binary:
 ```
-litex_sim --csr-json csr.json --cpu-type=vexriscv --cpu-variant=full --integrated-main-ram-size=0x06400000 --ram-init=boot.bin
+litex_sim --csr-json csr.json --with-ethernet --cpu-type=vexriscv --cpu-variant=full --integrated-main-ram-size=0x06400000 --ram-init=boot.bin
 ```
 ## 7. Modify Firmware (boot Directory)
 
