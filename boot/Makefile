@@ -4,12 +4,16 @@ include $(BUILD_DIR)/software/include/generated/variables.mak
 include $(SOC_DIRECTORY)/software/common.mak
 
 #Wolf includes
-
 SRCS += $(wildcard wolfcrypt/src/*.c)
 SRCS += $(wildcard src/*.c)
+
 OBJECTS  = crt0.o main.o
 OBJECTS += $(SRCS:.c=.o)
+
 INC  = -I./wolfssl -I./wolfssl/wolfcrypt -I.
+
+# INC = -I/usr/local/include/wolfssl
+
 
 all: boot.bin
 
@@ -21,20 +25,24 @@ endif
 
 vpath %.a $(PACKAGES:%=../%)
 
-# CFLAGS += $(INC) -DWOLFSSL_USER_SETTINGS
-
 CFLAGS += $(INC) 
 CFLAGS += -DWOLFSSL_USER_SETTINGS
+CFLAGS += -DWOLFSSL_SMALL_STACK
+CFLAGS += -DWOLFSSL_STATIC_MEMORY
+CFLAGS += -DHAVE_THREAD_LS
 
+# Note: libliteeth is linked via PACKAGES, not separately
 boot.elf: $(OBJECTS)
 	$(CC) $(LDFLAGS) -T linker.ld -N -o $@ \
 		$(OBJECTS) \
 		$(PACKAGES:%=-L$(BUILD_DIR)/software/%) \
-		-Wl,--whole-archive \
+		-L$(BUILD_DIR)/software/libliteeth \
 		-Wl,--gc-sections \
 		-Wl,-Map,$@.map \
-		$(LIBS:lib%=-l%)
-
+		-Wl,--start-group \
+		$(LIBS:lib%=-l%) \
+		-lliteeth \
+		-Wl,--end-group
 ifneq ($(OS),Windows_NT)
 	chmod -x $@
 endif
@@ -45,7 +53,6 @@ endif
 donut.o: CFLAGS   += -w
 
 VPATH = $(BIOS_DIRECTORY):$(BIOS_DIRECTORY)/cmds:$(CPU_DIRECTORY)
-
 
 %.o: %.cpp
 	$(compilexx)

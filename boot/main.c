@@ -242,12 +242,12 @@ static int pqc_eth_init(void)
            SERVER_IP_1, SERVER_IP_2, SERVER_IP_3, SERVER_IP_4, SERVER_PORT);
     
     /* ARP resolution */
-    printf("[NET] Resolving server MAC via ARP...\n");
-    if (!udp_arp_resolve(server_ip)) {
-        printf("[NET] ARP resolution failed\n");
-        return -1;
-    }
-    printf("[NET] ARP resolution successful\n");
+    // printf("[NET] Resolving server MAC via ARP...\n");
+    // if (!udp_arp_resolve(server_ip)) {
+    //     printf("[NET] ARP resolution failed\n");
+    //     return -1;
+    // }
+    // printf("[NET] ARP resolution successful\n");
     
     /* Initialize I/O context */
     io_ctx.server_ip = server_ip;
@@ -263,7 +263,23 @@ static int pqc_eth_init(void)
  *============================================================================*/
 static int dtls13_pqc_client(void)
 {
-    WOLFSSL_CTX* ctx = NULL;
+
+    // WOLFSSL_METHOD* method;
+    WOLFSSL_CTX* ctx;
+
+    // method = wolfDTLSv1_3_client_method();
+    // if (method == NULL) {
+    //     printf("error");
+    // }
+
+    //     printf("no error");
+
+
+    // ctx = wolfSSL_CTX_new(method);
+
+    // return 0;
+
+    // WOLFSSL_CTX* ctx = NULL;
     WOLFSSL* ssl = NULL;
     int ret;
     char buffer[256];
@@ -405,83 +421,6 @@ static int dtls13_pqc_client(void)
 }
 
 /*============================================================================
- * Standalone ML-KEM Test
- *============================================================================*/
-static int standalone_mlkem_test(void)
-{
-    printf("\n========================================\n");
-    printf("  Standalone ML-KEM-512 Test\n");
-    printf("========================================\n\n");
-    
-#if defined(WOLFSSL_HAVE_MLKEM) || defined(WOLFSSL_WC_MLKEM)
-    #include <wolfssl/wolfcrypt/wc_mlkem.h>
-    
-    int ret;
-    WC_RNG rng;
-    
-    wc_InitRng(&rng);
-    
-    MlKemKey *alice = wc_MlKemKey_New(WC_ML_KEM_512, NULL, INVALID_DEVID);
-    MlKemKey *bob = wc_MlKemKey_New(WC_ML_KEM_512, NULL, INVALID_DEVID);
-    
-    if (!alice || !bob) {
-        printf("Key allocation failed\n");
-        return -1;
-    }
-    
-    /* Alice: Generate keypair */
-    ret = wc_MlKemKey_MakeKey(alice, &rng);
-    if (ret != 0) {
-        printf("Alice KeyGen failed: %d\n", ret);
-        return ret;
-    }
-    printf("Alice: KeyGen OK\n");
-    
-    /* Alice: Export public key */
-    uint8_t alice_pub[WC_ML_KEM_512_PUBLIC_KEY_SIZE];
-    wc_MlKemKey_EncodePublicKey(alice, alice_pub, sizeof(alice_pub));
-    
-    /* Bob: Load Alice's public key and encapsulate */
-    wc_MlKemKey_DecodePublicKey(bob, alice_pub, sizeof(alice_pub));
-    
-    uint8_t ct[WC_ML_KEM_512_CIPHER_TEXT_SIZE];
-    uint8_t ss_bob[32], ss_alice[32];
-    
-    ret = wc_MlKemKey_Encapsulate(bob, ct, ss_bob, &rng);
-    if (ret != 0) {
-        printf("Bob Encaps failed: %d\n", ret);
-        return ret;
-    }
-    printf("Bob: Encapsulation OK\n");
-    
-    /* Alice: Decapsulate */
-    ret = wc_MlKemKey_Decapsulate(alice, ss_alice, ct, sizeof(ct));
-    if (ret != 0) {
-        printf("Alice Decaps failed: %d\n", ret);
-        return ret;
-    }
-    printf("Alice: Decapsulation OK\n");
-    
-    /* Verify */
-    if (memcmp(ss_bob, ss_alice, 32) == 0) {
-        printf("\n*** ML-KEM SUCCESS - Shared secrets match! ***\n");
-    } else {
-        printf("\n*** ML-KEM FAILED - Secrets don't match ***\n");
-    }
-    
-    wc_MlKemKey_Free(alice);
-    wc_MlKemKey_Free(bob);
-    wc_FreeRng(&rng);
-    
-#else
-    printf("ML-KEM not compiled in. Enable with:\n");
-    printf("  WOLFSSL_HAVE_MLKEM or WOLFSSL_WC_MLKEM\n");
-#endif
-    
-    return 0;
-}
-
-/*============================================================================
  * Main Entry Point
  *============================================================================*/
 int main(void)
@@ -501,17 +440,12 @@ int main(void)
     /* Initialize network */
     if (pqc_eth_init() != 0) {
         printf("ERROR: Network init failed\n");
-        // printf("Running standalone ML-KEM test only...\n");
-        // standalone_mlkem_test();
         goto idle;
     }
     
-    /* Run standalone test first */
-    // standalone_mlkem_test();
-    
     /* Small delay */
     printf("\n[Main] Waiting for network to settle...\n");
-    for (volatile int i = 0; i < 1000000; i++);
+    for (volatile int i = 0; i < 10000; i++);
     
     /* Run DTLS client */
     dtls13_pqc_client();
