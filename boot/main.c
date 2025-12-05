@@ -139,7 +139,13 @@ static int dtls_send_cb(WOLFSSL* ssl, char* buf, int sz, void* ctx)
     dtls_io_ctx_t* io = (dtls_io_ctx_t*)ctx;
     (void)ssl;
     
-    printf("[DTLS TX] Sending %d bytes\n", sz);
+    printf("[DTLS TX] === SENDING PACKET ===\n");
+    printf("[DTLS TX] Size: %d bytes\n", sz);
+    printf("[DTLS TX] First bytes: %02x %02x %02x %02x\n",
+           (uint8_t)buf[0], (uint8_t)buf[1], (uint8_t)buf[2], (uint8_t)buf[3]);
+    
+    /* SET DESTINATION IP - This is likely missing! */
+    udp_set_ip(io->server_ip);
     
     /* Get TX buffer and copy data */
     uint8_t* txbuf = (uint8_t*)udp_get_tx_buffer();
@@ -148,11 +154,11 @@ static int dtls_send_cb(WOLFSSL* ssl, char* buf, int sz, void* ctx)
     /* Send via LiteETH */
     int ret = udp_send(io->client_port, io->server_port, sz);
     
+    printf("[DTLS TX] udp_send returned: %d\n", ret);
+    
     if (ret) {
-        printf("[DTLS TX] Success\n");
         return sz;
     } else {
-        printf("[DTLS TX] Failed\n");
         return WOLFSSL_CBIO_ERR_GENERAL;
     }
 }
@@ -254,6 +260,8 @@ static int pqc_eth_init(void)
     io_ctx.server_port = SERVER_PORT;
     io_ctx.client_port = CLIENT_PORT;
     io_ctx.timeout_ms = DTLS_TIMEOUT_SEC * 1000;
+
+    udp_set_ip(server_ip);
     
     return 0;
 }
@@ -263,23 +271,7 @@ static int pqc_eth_init(void)
  *============================================================================*/
 static int dtls13_pqc_client(void)
 {
-
-    // WOLFSSL_METHOD* method;
-    WOLFSSL_CTX* ctx;
-
-    // method = wolfDTLSv1_3_client_method();
-    // if (method == NULL) {
-    //     printf("error");
-    // }
-
-    //     printf("no error");
-
-
-    // ctx = wolfSSL_CTX_new(method);
-
-    // return 0;
-
-    // WOLFSSL_CTX* ctx = NULL;
+    WOLFSSL_CTX* ctx = NULL;
     WOLFSSL* ssl = NULL;
     int ret;
     char buffer[256];
