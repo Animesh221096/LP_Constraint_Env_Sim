@@ -1,103 +1,170 @@
-# PQC-DTLS 1.3 Server Makefile
-# Uses system-installed wolfSSL
+# PQC-DTLS Server Makefile
+# For Linux host communicating with bare-metal RISC-V client
 #
-# Prerequisites:
-#   wolfSSL with DTLS 1.3 and ML-KEM support:
-#   ./configure --enable-dtls13 --enable-kyber --enable-experimental \
-#               --enable-dtls --enable-dtls-frag-ch
-#   make && sudo make install
+# Directory structure (from server/):
+#   ../wolfssl/           - wolfSSL headers
+#   ../wolfssl/wolfcrypt/ - wolfCrypt headers  
+#   ../wolfcrypt/src/     - wolfCrypt source files
 #
 # Usage:
-#   make dtls13     - Build DTLS 1.3 server
-#   make run13      - Run DTLS 1.3 server
-#   make demo       - Run ML-KEM demo only
+#   make              - Build the server
+#   make run          - Build and run the server
+#   make demo         - Run standalone ML-KEM demo only
+#   make clean        - Clean build artifacts
 
-CC      := gcc
+# Compiler settings
+CC      ?= gcc
 CFLAGS  := -Wall -Wextra -O2 -std=gnu11
-LDFLAGS := -lwolfssl -lpthread -lm
+LDFLAGS :=
 
-BUILD_DIR := build
+# Paths relative to server/ directory
+BOOT_DIR        := ..
+WOLFSSL_DIR     := $(BOOT_DIR)/wolfssl
+WOLFCRYPT_DIR   := $(BOOT_DIR)/wolfcrypt
 
-# Targets
-.PHONY: all dtls13 legacy run13 run demo clean help
+# Include paths - ORDER MATTERS!
+# Use -iquote for "quoted" includes to search local dirs first
+# This prevents /usr/local/include from being searched for local headers
+INC_FLAGS := -iquote. -iquote$(BOOT_DIR) -iquote$(WOLFSSL_DIR) -iquote$(WOLFSSL_DIR)/wolfcrypt
+# Use -I for <angle bracket> includes
+INC_FLAGS += -I. -I$(BOOT_DIR) -I$(WOLFSSL_DIR)
 
-all: dtls13
+# wolfCrypt source files
+WOLFCRYPT_SRCS := $(wildcard $(WOLFCRYPT_DIR)/src/*.c)
+WOLFCRYPT_OBJS := $(patsubst $(WOLFCRYPT_DIR)/src/%.c,build/wc_%.o,$(WOLFCRYPT_SRCS))
 
-# DTLS 1.3 server using system wolfSSL
-dtls13: $(BUILD_DIR)/pqc_dtls_server
+# Project files
+BUILD_DIR   := build
+TARGET      := pqc_server
+SRCS        := pqc_server.c
+OBJS        := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SRCS))
+
+# Compiler flags
+CFLAGS += $(INC_FLAGS)
+CFLAGS += -DWOLFSSL_USER_SETTINGS
+
+# Linker flags  
+LDFLAGS += -lpthread -lm
+
+#============================================================================
+# Build targets
+#============================================================================
+
+.PHONY: all clean run demo help show-config check-deps
+
+all: check-deps $(BUILD_DIR)/$(TARGET)
 	@echo ""
-	@echo "Built: $(BUILD_DIR)/pqc_dtls_server"
-	@echo "Run with: make run13"
+	@echo "========================================"
+	@echo "  Build complete: $(BUILD_DIR)/$(TARGET)"
+	@echo "  Run with: make run"
+	@echo "========================================"
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/pqc_dtls_server: pqc_dtls_server.c | $(BUILD_DIR)
-	@echo "[CC] pqc_dtls_server.c (using system wolfSSL)"
-	$(CC) $(CFLAGS) $< -o $@ $(LDFLAGS)
+# Compile server source
+$(BUILD_DIR)/pqc_server.o: pqc_server.c user_settings.h | $(BUILD_DIR)
+	@echo "[CC] $<"
+	$(CC) $(CFLAGS) -c $< -o $@
 
-# Legacy custom protocol server (uses local wolfcrypt)
-legacy: $(BUILD_DIR)/pqc_server
-	@echo ""
-	@echo "Built: $(BUILD_DIR)/pqc_server (legacy custom protocol)"
-
-WOLFCRYPT_DIR := ../wolfcrypt
-WOLFCRYPT_SRCS := $(wildcard $(WOLFCRYPT_DIR)/src/*.c)
-WOLFCRYPT_OBJS := $(patsubst $(WOLFCRYPT_DIR)/src/%.c,$(BUILD_DIR)/wc_%.o,$(WOLFCRYPT_SRCS))
-
-$(BUILD_DIR)/pqc_server.o: pqc_server.c | $(BUILD_DIR)
-	@echo "[CC] pqc_server.c"
-	$(CC) $(CFLAGS) -I. -I.. -I../wolfssl -DWOLFSSL_USER_SETTINGS -c $< -o $@
-
+# Compile wolfCrypt sources (suppress warnings from library code)
 $(BUILD_DIR)/wc_%.o: $(WOLFCRYPT_DIR)/src/%.c | $(BUILD_DIR)
 	@echo "[CC] wolfcrypt/$*.c"
-	@$(CC) $(CFLAGS) -I. -I.. -I../wolfssl -DWOLFSSL_USER_SETTINGS -w -c $< -o $@
+	@$(CC) $(CFLAGS) -w -c $< -o $@
 
-$(BUILD_DIR)/pqc_server: $(BUILD_DIR)/pqc_server.o $(WOLFCRYPT_OBJS)
-	@echo "[LD] pqc_server"
-	$(CC) $^ -o $@ -lpthread -lm
+# Link everything
+$(BUILD_DIR)/$(TARGET): $(OBJS) $(WOLFCRYPT_OBJS)
+	@echo "[LD] $@"
+	$(CC) $^ -o $@ $(LDFLAGS)
+	@echo ""
 
+#============================================================================
 # Run targets
-run13: dtls13
+#============================================================================
+
+run: all
 	@echo ""
 	@echo "========================================="
-	@echo "  Starting DTLS 1.3 PQC Server"
-	@echo "  Port: 11111"
+	@echo "  Starting PQC-DTLS Server"
+	@echo "  Server: 192.168.1.100:11111"
 	@echo "  Press Ctrl+C to stop"
 	@echo "========================================="
-	./$(BUILD_DIR)/pqc_dtls_server
+	@echo ""
+	./$(BUILD_DIR)/$(TARGET)
 
-run: legacy
-	./$(BUILD_DIR)/pqc_server
+demo: all
+	@echo ""
+	@echo "Running standalone ML-KEM demo..."
+	./$(BUILD_DIR)/$(TARGET) --demo
 
-demo: dtls13
-	./$(BUILD_DIR)/pqc_dtls_server --demo
+#============================================================================
+# Dependency checking
+#============================================================================
 
+check-deps:
+	@echo "Checking dependencies..."
+	@test -f user_settings.h || (echo "ERROR: user_settings.h not found"; exit 1)
+	@test -d $(WOLFSSL_DIR) || (echo "ERROR: $(WOLFSSL_DIR) not found"; exit 1)
+	@test -d $(WOLFCRYPT_DIR)/src || (echo "ERROR: $(WOLFCRYPT_DIR)/src not found"; exit 1)
+	@echo "  user_settings.h: OK"
+	@echo "  wolfssl dir: OK"
+	@echo "  wolfcrypt/src: OK ($(words $(WOLFCRYPT_SRCS)) source files)"
+	@echo ""
+
+show-config:
+	@echo ""
+	@echo "=== Server Configuration ==="
+	@echo "  Server IP:     192.168.1.100"
+	@echo "  Server Port:   11111"
+	@echo "  Client Port:   22222"
+	@echo ""
+	@echo "=== Build Configuration ==="
+	@echo "  CC:            $(CC)"
+	@echo "  WOLFSSL_DIR:   $(WOLFSSL_DIR)"
+	@echo "  WOLFCRYPT_DIR: $(WOLFCRYPT_DIR)"
+	@echo ""
+	@echo "=== Include Paths ==="
+	@echo "  $(INC_FLAGS)" | tr ' ' '\n' | grep -E '^-[iI]' | sed 's/^/  /'
+	@echo ""
+	@echo "=== wolfCrypt Sources ==="
+	@echo "  $(words $(WOLFCRYPT_SRCS)) files found"
+	@ls $(WOLFCRYPT_DIR)/src/*.c 2>/dev/null | head -5 | xargs -I{} basename {} | sed 's/^/    /'
+	@echo "    ..."
+	@echo ""
+
+#============================================================================
 # Cleanup
-clean:
-	rm -rf $(BUILD_DIR)
+#============================================================================
 
+clean:
+	@echo "Cleaning build artifacts..."
+	rm -rf $(BUILD_DIR)
+	@echo "Done"
+
+#============================================================================
 # Help
+#============================================================================
+
 help:
 	@echo ""
 	@echo "PQC-DTLS Server Build System"
 	@echo "============================"
 	@echo ""
-	@echo "DTLS 1.3 (recommended):"
-	@echo "  make dtls13   - Build DTLS 1.3 server (requires system wolfSSL)"
-	@echo "  make run13    - Build and run DTLS 1.3 server"
+	@echo "Targets:"
+	@echo "  make          - Build the server"
+	@echo "  make run      - Build and run server"
 	@echo "  make demo     - Run ML-KEM standalone demo"
-	@echo ""
-	@echo "Legacy (custom protocol):"
-	@echo "  make legacy   - Build custom protocol server (uses local wolfcrypt)"
-	@echo "  make run      - Run custom protocol server"
-	@echo ""
-	@echo "Other:"
 	@echo "  make clean    - Remove build files"
+	@echo "  make show-config - Show configuration"
 	@echo ""
-	@echo "wolfSSL Installation:"
-	@echo "  cd wolfssl"
-	@echo "  ./configure --enable-dtls13 --enable-kyber --enable-experimental \\"
-	@echo "              --enable-dtls --enable-dtls-frag-ch"
-	@echo "  make && sudo make install && sudo ldconfig"
+	@echo "Expected directory layout:"
+	@echo "  boot/"
+	@echo "  ├── server/           <- You are here"
+	@echo "  │   ├── Makefile"
+	@echo "  │   ├── pqc_server.c"
+	@echo "  │   └── user_settings.h"
+	@echo "  ├── wolfssl/          <- Headers"
+	@echo "  │   └── wolfcrypt/    <- More headers"
+	@echo "  └── wolfcrypt/"
+	@echo "      └── src/          <- Source files"
 	@echo ""
